@@ -37,27 +37,30 @@ def extract(req: InvoiceRequest):
     # -------------------------
     # AMOUNT (IMPORTANT FIX)
     # Prioritize TOTAL / DUE fields
-    # -------------------------
-    amount_patterns = [
-        r"(?i)total\s*(?:due|amount)?\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
-        r"(?i)amount\s*due\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
-        r"(?i)balance\s*due\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
-    ]
-
     amount = None
-    for pattern in amount_patterns:
-        match = re.search(pattern, text)
-        if match:
-            amount = float(match.group(1))
-            break
 
-    # fallback: last number in text (safer than first)
-    if amount is None:
-        numbers = re.findall(r"[0-9]+(?:\.[0-9]{1,2})?", text)
-        amount = float(numbers[-1]) if numbers else 0.0
+# 1. PRIORITY: explicit total fields
+amount_patterns = [
+    r"(?i)total\s*(?:due|amount|payable)?\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
+    r"(?i)amount\s*due\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
+    r"(?i)balance\s*due\s*[:=]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
+]
 
-    # -------------------------
-    # CURRENCY
+for p in amount_patterns:
+    m = re.search(p, text)
+    if m:
+        amount = float(m.group(1))
+        break
+
+# 2. IMPROVED FALLBACK: pick LARGEST number (not last, not first)
+if amount is None:
+    numbers = re.findall(r"[0-9]+(?:\.[0-9]{1,2})?", text)
+
+    if numbers:
+        # convert and pick MAX (total is usually largest in invoice)
+        amount = max(float(n) for n in numbers)
+    else:
+        amount = 0.0
     # -------------------------
     currency_match = re.search(r"\b(USD|EUR|GBP)\b", text, re.IGNORECASE)
     currency = currency_match.group(1).upper() if currency_match else "USD"
